@@ -197,3 +197,10 @@ BaseSetAssoc::computeStats()
         }
     }
 }
+
+CacheBlk*
+BaseSetAssoc::findBlockBySetAndWay(int set, int way) const
+{
+    return sets[set].blks[way];
+}
+

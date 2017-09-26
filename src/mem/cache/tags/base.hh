@@ -212,6 +212,16 @@ class BaseTags : public ClockedObject
     virtual int extractSet(Addr addr) const = 0;
 
     virtual void forEachBlk(CacheBlkVisitor &visitor) = 0;
+
+    virtual unsigned getNumWays() const = 0;
+
+    /**
+     * Find the cache block given set and way
+     * @param set The set of the block.
+     * @param way The way of the block.
+     * @return The cache block.
+     */
+    virtual CacheBlk* findBlockBySetAndWay(int set, int way) const = 0;
 };
 
 class BaseTagsCallback : public Callback

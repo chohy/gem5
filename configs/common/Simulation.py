@@ -450,7 +450,7 @@ def run(options, root, testsys, cpu_class):
 
     if options.maxinsts:
         for i in xrange(np):
-            testsys.cpu[i].max_insts_any_thread = options.maxinsts
+            testsys.cpu[0].max_insts_any_thread = options.maxinsts
 
     if cpu_class:
         switch_cpus = [cpu_class(switched_out=True, cpu_id=(i))
@@ -458,14 +458,14 @@ def run(options, root, testsys, cpu_class):
 
         for i in xrange(np):
             if options.fast_forward:
-                testsys.cpu[i].max_insts_any_thread = int(options.fast_forward)
+                testsys.cpu[0].max_insts_any_thread = int(options.fast_forward)
             switch_cpus[i].system =  testsys
             switch_cpus[i].workload = testsys.cpu[i].workload
             switch_cpus[i].clk_domain = testsys.cpu[i].clk_domain
             switch_cpus[i].progress_interval = testsys.cpu[i].progress_interval
             # simulation period
             if options.maxinsts:
-                switch_cpus[i].max_insts_any_thread = options.maxinsts
+                switch_cpus[0].max_insts_any_thread = options.maxinsts
             # Add checker cpu if selected
             if options.checker:
                 switch_cpus[i].addCheckerCpu()

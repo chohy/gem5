@@ -56,11 +56,27 @@ class L1Cache(BaseCache):
 
 class L2Cache(BaseCache):
     assoc = 8
-    hit_latency = 20
-    response_latency = 20
+    hit_latency = 10
+    response_latency = 10
     mshrs = 20
     tgts_per_mshr = 12
     write_buffers = 8
+
+class L3Cache(BaseCache):
+    assoc = 16
+    hit_latency = 20
+    response_latency = 20
+    mshrs = 64
+    tgts_per_mshr = 20
+    write_buffers = 32
+
+class L4Cache(BaseCache):
+    assoc = 32
+    hit_latency = 40
+    response_latency = 40
+    mshrs = 128
+    tgts_per_mshr = 40
+    write_buffers = 64
 
 class IOCache(BaseCache):
     assoc = 8

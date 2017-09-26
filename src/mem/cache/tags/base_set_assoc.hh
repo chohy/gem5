@@ -371,6 +371,21 @@ public:
                 return;
         }
     }
+
+    /**
+      Return the number of ways this cache has
+     */
+    unsigned getNumWays() const override {
+        return assoc;
+    }
+
+    /**
+     * Find the cache block given set and way
+     * @param set The set of the block.
+     * @param way The way of the block.
+     * @return The cache block.
+     */
+    CacheBlk *findBlockBySetAndWay(int set, int way) const override;
 };
 
 #endif // __MEM_CACHE_TAGS_BASESETASSOC_HH__

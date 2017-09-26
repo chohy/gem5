@@ -63,23 +63,48 @@ def config_cache(options, system):
         dcache_class, icache_class, l2_cache_class = \
             O3_ARM_v7a_DCache, O3_ARM_v7a_ICache, O3_ARM_v7aL2
     else:
-        dcache_class, icache_class, l2_cache_class = \
-            L1Cache, L1Cache, L2Cache
+        dcache_class, icache_class, l2_cache_class, l3_cache_class,\
+            l4_cache_class = \
+            L1Cache, L1Cache, L2Cache, L3Cache, L4Cache
 
     # Set the cache line size of the system
     system.cache_line_size = options.cacheline_size
 
-    if options.l2cache:
+    if options.l4cache:
+        system.l4 = l4_cache_class(clk_domain=system.cpu_clk_domain,\
+            size=options.l4_size, assoc=options.l4_assoc)
+        system.tol4bus = L2XBar(clk_domain=system.cpu_clk_domain)
+        system.l4.cpu_side = system.tol4bus.master
+        system.l4.mem_side = system.membus.slave
+
+    if options.l3cache or options.l4cache:
+        system.l3 = l3_cache_class(clk_domain=system.cpu_clk_domain,\
+            size=options.l3_size, assoc=options.l3_assoc)
+        system.tol3bus = L2XBar(clk_domain=system.cpu_clk_domain)
+        system.l3.cpu_side = system.tol3bus.master
+        if options.l4cache:
+            system.l3.mem_side = system.tol4bus.slave
+        else:
+            system.l3.mem_side = system.membus.slave
+
+    #implementation l2cahce
+    #when use l4cache, l2cache is private
+    #otherwise, l2cache is shared
+    if (options.l2cache or options.l3cache) and (not options.l4cache):
         # Provide a clock for the L2 and the L1-to-L2 bus here as they
         # are not connected using addTwoLevelCacheHierarchy. Use the
         # same clock as the CPUs.
-        system.l2 = l2_cache_class(clk_domain=system.cpu_clk_domain,
-                                   size=options.l2_size,
+        system.l2 = l2_cache_class(clk_domain=system.cpu_clk_domain,\
+                                   size=options.l2_size,\
                                    assoc=options.l2_assoc)
 
         system.tol2bus = L2XBar(clk_domain = system.cpu_clk_domain)
         system.l2.cpu_side = system.tol2bus.master
-        system.l2.mem_side = system.membus.slave
+
+        if options.l3cache:
+            system.l2.mem_side = system.tol3bus.slave
+        else:
+            system.l2.mem_side = system.membus.slave
 
     if options.memchecker:
         system.memchecker = MemChecker()
@@ -121,6 +146,17 @@ def config_cache(options, system):
                 system.cpu[i].dcache = dcache_real
                 system.cpu[i].dcache_mon = dcache_mon
 
+            #l2cahce implementation
+            #when use l4cache, l2cache is private
+            if options.l4cache:
+                system.cpu[i].l2 = l2_cache_class(\
+                    clk_domain=system.cpu_clk_domain,\
+                    size=options.l2_size, assoc=options.l2_assoc)
+                system.cpu[i].tol2bus = L2XBar(\
+                    clk_domain=system.cpu_clk_domain)
+                system.cpu[i].l2.cpu_side = system.cpu[i].tol2bus.master
+                system.cpu[i].l2.mem_side = system.tol3bus.slave
+
         elif options.external_memory_system:
             # These port names are presented to whatever 'external' system
             # gem5 is connecting to.  Its configuration will likely depend
@@ -140,7 +176,8 @@ def config_cache(options, system):
 
         system.cpu[i].createInterruptController()
         if options.l2cache:
-            system.cpu[i].connectAllPorts(system.tol2bus, system.membus)
+            system.cpu[i].connectAllPorts(system.cpu[i].tol2bus,\
+                                          system.membus)
         elif options.external_memory_system:
             system.cpu[i].connectUncachedPorts(system.membus)
         else:

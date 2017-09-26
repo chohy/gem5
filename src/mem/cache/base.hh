@@ -470,6 +470,8 @@ class BaseCache : public MemObject
 
     Stats::Scalar mshr_no_allocate_misses;
 
+    Stats::Histogram num_shared_tag_pattern[25];
+
     /**
      * @}
      */

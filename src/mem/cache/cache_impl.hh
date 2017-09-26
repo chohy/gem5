@@ -334,6 +334,32 @@ Cache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
             pkt->getAddr(), pkt->getSize(), pkt->isSecure() ? "s" : "ns",
             blk ? "hit " + blk->print() : "miss");
 
+
+    // Analyze shared tag patterns inter ways, only when miss
+    if(!blk){
+        for(int i=0; i<25; i++){
+            std::vector<Addr> shared_tag_pattern;
+            shared_tag_pattern.push_back(
+                tags->extractTag((pkt->getAddr()))>>i);
+
+            //std::cout<<"req addr: "<<pkt->getAddr()<mstd::endl;
+            int num_way = tags->getNumWays();
+            for(int j=0; j<num_way; j++){
+                CacheBlk *tmp = tags->findBlockBySetAndWay(
+                    tags->extractSet(pkt->getAddr()), j);
+                //std::cout<<"way tag: "<<tmp->tag<<std::endl;
+                if(tmp->isValid() &&
+                   std::find(shared_tag_pattern.begin(),
+                         shared_tag_pattern.end(),
+                         (tmp->tag)>>i) == shared_tag_pattern.end()){
+                    shared_tag_pattern.push_back((tmp->tag)>>i);
+                }
+            }
+            num_shared_tag_pattern[i].sample(shared_tag_pattern.size());
+        }
+    }
+
+
     // Writeback handling is special case.  We can write the block into
     // the cache without having a writeable copy (or any copy at all).
     if (pkt->cmd == MemCmd::Writeback) {

@@ -322,3 +322,9 @@ FALRUParams::create()
     return new FALRU(this);
 }
 
+CacheBlk*
+FALRU::findBlockBySetAndWay(int set, int way) const
+{
+    assert(set == 0);
+    return &blks[way];
+}
