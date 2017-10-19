@@ -1,71 +1,19 @@
-/*
- * Copyright (c) 2010-2015 ARM Limited
- * All rights reserved.
- *
- * The license below extends only to copyright in the software and shall
- * not be construed as granting a license to any other intellectual
- * property including but not limited to intellectual property relating
- * to a hardware implementation of the functionality of the software
- * licensed hereunder.  You may use the software subject to the license
- * terms below provided that you ensure that this notice is replicated
- * unmodified and in its entirety in all distributions of the software,
- * modified or unmodified, in source code or in binary form.
- *
- * Copyright (c) 2002-2005 The Regents of The University of Michigan
- * Copyright (c) 2010,2015 Advanced Micro Devices, Inc.
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met: redistributions of source code must retain the above copyright
- * notice, this list of conditions and the following disclaimer;
- * redistributions in binary form must reproduce the above copyright
- * notice, this list of conditions and the following disclaimer in the
- * documentation and/or other materials provided with the distribution;
- * neither the name of the copyright holders nor the names of its
- * contributors may be used to endorse or promote products derived from
- * this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Erik Hallnor
- *          Dave Greene
- *          Nathan Binkert
- *          Steve Reinhardt
- *          Ron Dreslinski
- *          Andreas Sandberg
- */
-
-#ifndef __MEM_CACHE_CACHE_IMPL_HH__
-#define __MEM_CACHE_CACHE_IMPL_HH__
-
 /**
  * @file
- * Cache definitions.
+ * GTTCache definitions.
  */
 
 #include "base/misc.hh"
 #include "base/types.hh"
-#include "debug/Cache.hh"
 #include "debug/CachePort.hh"
 #include "debug/CacheTags.hh"
 #include "mem/cache/prefetch/base.hh"
 #include "mem/cache/blk.hh"
-#include "mem/cache/cache.hh"
+#include "mem/cache/gtt_cache.hh"
 #include "mem/cache/mshr.hh"
 #include "sim/sim_exit.hh"
 
-Cache::Cache(const Params *p)
+GTTCache::GTTCache(const Params *p)
     : BaseCache(p),
       tags(p->tags),
       prefetcher(p->prefetcher),
@@ -85,7 +33,7 @@ Cache::Cache(const Params *p)
         prefetcher->setCache(this);
 }
 
-Cache::~Cache()
+GTTCache::~GTTCache()
 {
     delete [] tempBlock->data;
     delete tempBlock;
@@ -95,13 +43,13 @@ Cache::~Cache()
 }
 
 void
-Cache::regStats()
+GTTCache::regStats()
 {
     BaseCache::regStats();
 }
 
 void
-Cache::cmpAndSwap(CacheBlk *blk, PacketPtr pkt)
+GTTCache::cmpAndSwap(CacheBlk *blk, PacketPtr pkt)
 {
     assert(pkt->isRequest());
 
@@ -142,7 +90,7 @@ Cache::cmpAndSwap(CacheBlk *blk, PacketPtr pkt)
 
 
 void
-Cache::satisfyCpuSideRequest(PacketPtr pkt, CacheBlk *blk,
+GTTCache::satisfyCpuSideRequest(PacketPtr pkt, CacheBlk *blk,
                              bool deferred_response, bool pending_downgrade)
 {
     assert(pkt->isRequest());
@@ -191,7 +139,7 @@ Cache::satisfyCpuSideRequest(PacketPtr pkt, CacheBlk *blk,
                 }
                 // on ReadExReq we give up our copy unconditionally
                 if (blk != tempBlock)
-                    tags->invalidate(blk);
+                    tags->invalidateBlk(blk);
                 blk->invalidate();
             } else if (blk->isWritable() && !pending_downgrade
                       && !pkt->sharedAsserted() && !pkt->req->isInstFetch()) {
@@ -233,7 +181,7 @@ Cache::satisfyCpuSideRequest(PacketPtr pkt, CacheBlk *blk,
         assert(pkt->isUpgrade() ||
                (pkt->isWriteInvalidate() && !isTopLevel));
         assert(blk != tempBlock);
-        tags->invalidate(blk);
+        tags->invalidateBlk(blk);
         blk->invalidate();
         DPRINTF(Cache, "%s for %s addr %#llx size %d (invalidation)\n",
                 __func__, pkt->cmdString(), pkt->getAddr(), pkt->getSize());
@@ -249,7 +197,7 @@ Cache::satisfyCpuSideRequest(PacketPtr pkt, CacheBlk *blk,
 
 
 void
-Cache::markInService(MSHR *mshr, bool pending_dirty_resp)
+GTTCache::markInService(MSHR *mshr, bool pending_dirty_resp)
 {
     markInServiceInternal(mshr, pending_dirty_resp);
 #if 0
@@ -266,7 +214,7 @@ Cache::markInService(MSHR *mshr, bool pending_dirty_resp)
 
 
 void
-Cache::squash(int threadNum)
+GTTCache::squash(int threadNum)
 {
     bool unblock = false;
     BlockedCause cause = NUM_BLOCKED_CAUSES;
@@ -293,7 +241,7 @@ Cache::squash(int threadNum)
 /////////////////////////////////////////////////////
 
 bool
-Cache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
+GTTCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
               PacketList &writebacks)
 {
     // sanity check
@@ -314,7 +262,7 @@ Cache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
         if (old_blk && old_blk->isValid()) {
             if (old_blk->isDirty())
                 writebacks.push_back(writebackBlk(old_blk));
-            tags->invalidate(old_blk);
+            tags->invalidateBlk(old_blk);
             old_blk->invalidate();
         }
 
@@ -333,32 +281,6 @@ Cache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
             pkt->req->isInstFetch() ? " (ifetch)" : "",
             pkt->getAddr(), pkt->getSize(), pkt->isSecure() ? "s" : "ns",
             blk ? "hit " + blk->print() : "miss");
-
-
-    // Analyze shared tag patterns inter ways, only when miss
-    if(!blk){
-        for(int i=0; i<25; i++){
-            std::vector<Addr> shared_tag_pattern;
-            shared_tag_pattern.push_back(
-                tags->extractTag((pkt->getAddr()))>>i);
-
-            //std::cout<<"req addr: "<<pkt->getAddr()<mstd::endl;
-            int num_way = tags->getNumWays();
-            for(int j=0; j<num_way; j++){
-                CacheBlk *tmp = tags->findBlockBySetAndWay(
-                    tags->extractSet(pkt->getAddr()), j);
-                //std::cout<<"way tag: "<<tmp->tag<<std::endl;
-                if(tmp->isValid() &&
-                   std::find(shared_tag_pattern.begin(),
-                         shared_tag_pattern.end(),
-                         (tmp->tag)>>i) == shared_tag_pattern.end()){
-                    shared_tag_pattern.push_back((tmp->tag)>>i);
-                }
-            }
-            num_shared_tag_pattern[i].sample(shared_tag_pattern.size());
-        }
-    }
-
 
     // Writeback handling is special case.  We can write the block into
     // the cache without having a writeable copy (or any copy at all).
@@ -421,7 +343,7 @@ class ForwardResponseRecord : public Packet::SenderState
 };
 
 void
-Cache::recvTimingSnoopResp(PacketPtr pkt)
+GTTCache::recvTimingSnoopResp(PacketPtr pkt)
 {
     DPRINTF(Cache, "%s for %s addr %#llx size %d\n", __func__,
             pkt->cmdString(), pkt->getAddr(), pkt->getSize());
@@ -459,7 +381,7 @@ Cache::recvTimingSnoopResp(PacketPtr pkt)
 }
 
 void
-Cache::promoteWholeLineWrites(PacketPtr pkt)
+GTTCache::promoteWholeLineWrites(PacketPtr pkt)
 {
     // Cache line clearing instructions
     if (doFastWrites && (pkt->cmd == MemCmd::WriteReq) &&
@@ -471,7 +393,7 @@ Cache::promoteWholeLineWrites(PacketPtr pkt)
 }
 
 bool
-Cache::recvTimingReq(PacketPtr pkt)
+GTTCache::recvTimingReq(PacketPtr pkt)
 {
     DPRINTF(CacheTags, "%s tags: %s\n", __func__, tags->print());
 //@todo Add back in MemDebug Calls
@@ -793,7 +715,7 @@ Cache::recvTimingReq(PacketPtr pkt)
 
 // See comment in cache.hh.
 PacketPtr
-Cache::getBusPacket(PacketPtr cpu_pkt, CacheBlk *blk,
+GTTCache::getBusPacket(PacketPtr cpu_pkt, CacheBlk *blk,
                     bool needsExclusive) const
 {
     bool blkValid = blk && blk->isValid();
@@ -867,7 +789,7 @@ Cache::getBusPacket(PacketPtr cpu_pkt, CacheBlk *blk,
 
 
 Tick
-Cache::recvAtomic(PacketPtr pkt)
+GTTCache::recvAtomic(PacketPtr pkt)
 {
     // We are in atomic mode so we pay just for lookupLatency here.
     Cycles lat = lookupLatency;
@@ -886,7 +808,7 @@ Cache::recvAtomic(PacketPtr pkt)
         if (pkt->isInvalidate()) {
             CacheBlk *blk = tags->findBlock(pkt->getAddr(), pkt->isSecure());
             if (blk && blk->isValid()) {
-                tags->invalidate(blk);
+                tags->invalidateBlk(blk);
                 blk->invalidate();
                 DPRINTF(Cache, "rcvd mem-inhibited %s on %#llx (%s):"
                         " invalidating\n",
@@ -1015,7 +937,7 @@ Cache::recvAtomic(PacketPtr pkt)
 
 
 void
-Cache::functionalAccess(PacketPtr pkt, bool fromCpuSide)
+GTTCache::functionalAccess(PacketPtr pkt, bool fromCpuSide)
 {
     if (system->bypassCaches()) {
         // Packets from the memory side are snoop request and
@@ -1091,7 +1013,7 @@ Cache::functionalAccess(PacketPtr pkt, bool fromCpuSide)
 
 
 void
-Cache::recvTimingResp(PacketPtr pkt)
+GTTCache::recvTimingResp(PacketPtr pkt)
 {
     assert(pkt->isResponse());
 
@@ -1292,7 +1214,7 @@ Cache::recvTimingResp(PacketPtr pkt)
         if ((pkt->isInvalidate() || mshr->hasPostInvalidate()) &&
             (!pkt->isWriteInvalidate() || !isTopLevel)) {
             assert(blk != tempBlock);
-            tags->invalidate(blk);
+            tags->invalidateBlk(blk);
             blk->invalidate();
         } else if (mshr->hasPostDowngrade()) {
             blk->status &= ~BlkWritable;
@@ -1351,7 +1273,7 @@ Cache::recvTimingResp(PacketPtr pkt)
 }
 
 PacketPtr
-Cache::writebackBlk(CacheBlk *blk)
+GTTCache::writebackBlk(CacheBlk *blk)
 {
     assert(blk && blk->isValid() && blk->isDirty());
 
@@ -1379,21 +1301,21 @@ Cache::writebackBlk(CacheBlk *blk)
 }
 
 void
-Cache::memWriteback()
+GTTCache::memWriteback()
 {
-    CacheBlkVisitorWrapper visitor(*this, &Cache::writebackVisitor);
+    CacheBlkVisitorWrapper visitor(*this, &GTTCache::writebackVisitor);
     tags->forEachBlk(visitor);
 }
 
 void
-Cache::memInvalidate()
+GTTCache::memInvalidate()
 {
-    CacheBlkVisitorWrapper visitor(*this, &Cache::invalidateVisitor);
+    CacheBlkVisitorWrapper visitor(*this, &GTTCache::invalidateVisitor);
     tags->forEachBlk(visitor);
 }
 
 bool
-Cache::isDirty() const
+GTTCache::isDirty() const
 {
     CacheBlkIsDirtyVisitor visitor;
     tags->forEachBlk(visitor);
@@ -1402,7 +1324,7 @@ Cache::isDirty() const
 }
 
 bool
-Cache::writebackVisitor(CacheBlk &blk)
+GTTCache::writebackVisitor(CacheBlk &blk)
 {
     if (blk.isDirty()) {
         assert(blk.isValid());
@@ -1423,7 +1345,7 @@ Cache::writebackVisitor(CacheBlk &blk)
 }
 
 bool
-Cache::invalidateVisitor(CacheBlk &blk)
+GTTCache::invalidateVisitor(CacheBlk &blk)
 {
 
     if (blk.isDirty())
@@ -1431,7 +1353,7 @@ Cache::invalidateVisitor(CacheBlk &blk)
 
     if (blk.isValid()) {
         assert(!blk.isDirty());
-        tags->invalidate(&blk);
+        tags->invalidateBlk(&blk);
         blk.invalidate();
     }
 
@@ -1439,9 +1361,9 @@ Cache::invalidateVisitor(CacheBlk &blk)
 }
 
 CacheBlk*
-Cache::allocateBlock(Addr addr, bool is_secure, PacketList &writebacks)
+GTTCache::allocateBlock(Addr addr, bool is_secure, PacketList &writebacks)
 {
-    CacheBlk *blk = tags->findVictim(addr);
+    CacheBlk *blk = tags->findVictimBlk(addr);
 
     if (blk->isValid()) {
         Addr repl_addr = tags->regenerateBlkAddr(blk->tag, blk->set);
@@ -1477,7 +1399,7 @@ Cache::allocateBlock(Addr addr, bool is_secure, PacketList &writebacks)
 // mode we don't mess with the write buffer (we just perform the
 // writebacks atomically once the original request is complete).
 CacheBlk*
-Cache::handleFill(PacketPtr pkt, CacheBlk *blk, PacketList &writebacks)
+GTTCache::handleFill(PacketPtr pkt, CacheBlk *blk, PacketList &writebacks)
 {
     assert(pkt->isResponse() || pkt->isWriteInvalidate());
     Addr addr = pkt->getAddr();
@@ -1502,7 +1424,7 @@ Cache::handleFill(PacketPtr pkt, CacheBlk *blk, PacketList &writebacks)
             // complete the current request and then get rid of it
             assert(!tempBlock->isValid());
             blk = tempBlock;
-            tempBlock->set = tags->extractSet(addr);
+            tempBlock->set = tags->extractIndex(addr);
             tempBlock->tag = tags->extractTag(addr);
             // @todo: set security state as well...
             DPRINTF(Cache, "using temp block for %#llx (%s)\n", addr,
@@ -1566,7 +1488,7 @@ Cache::handleFill(PacketPtr pkt, CacheBlk *blk, PacketList &writebacks)
 /////////////////////////////////////////////////////
 
 void
-Cache::doTimingSupplyResponse(PacketPtr req_pkt, const uint8_t *blk_data,
+GTTCache::doTimingSupplyResponse(PacketPtr req_pkt, const uint8_t *blk_data,
                               bool already_copied, bool pending_inval)
 {
     // sanity check
@@ -1613,7 +1535,7 @@ Cache::doTimingSupplyResponse(PacketPtr req_pkt, const uint8_t *blk_data,
 }
 
 void
-Cache::handleSnoop(PacketPtr pkt, CacheBlk *blk, bool is_timing,
+GTTCache::handleSnoop(PacketPtr pkt, CacheBlk *blk, bool is_timing,
                    bool is_deferred, bool pending_inval)
 {
     DPRINTF(Cache, "%s for %s addr %#llx size %d\n", __func__,
@@ -1762,7 +1684,7 @@ Cache::handleSnoop(PacketPtr pkt, CacheBlk *blk, bool is_timing,
     // like that
     if (invalidate) {
         if (blk != tempBlock)
-            tags->invalidate(blk);
+            tags->invalidateBlk(blk);
         blk->invalidate();
     }
 
@@ -1771,7 +1693,7 @@ Cache::handleSnoop(PacketPtr pkt, CacheBlk *blk, bool is_timing,
 
 
 void
-Cache::recvTimingSnoopReq(PacketPtr pkt)
+GTTCache::recvTimingSnoopReq(PacketPtr pkt)
 {
     DPRINTF(Cache, "%s for %s addr %#llx size %d\n", __func__,
             pkt->cmdString(), pkt->getAddr(), pkt->getSize());
@@ -1857,7 +1779,7 @@ Cache::recvTimingSnoopReq(PacketPtr pkt)
 }
 
 bool
-Cache::CpuSidePort::recvTimingSnoopResp(PacketPtr pkt)
+GTTCache::CpuSidePort::recvTimingSnoopResp(PacketPtr pkt)
 {
     // Express snoop responses from master to slave, e.g., from L1 to L2
     cache->recvTimingSnoopResp(pkt);
@@ -1865,7 +1787,7 @@ Cache::CpuSidePort::recvTimingSnoopResp(PacketPtr pkt)
 }
 
 Tick
-Cache::recvAtomicSnoop(PacketPtr pkt)
+GTTCache::recvAtomicSnoop(PacketPtr pkt)
 {
     // Snoops shouldn't happen when bypassing caches
     assert(!system->bypassCaches());
@@ -1883,7 +1805,7 @@ Cache::recvAtomicSnoop(PacketPtr pkt)
 
 
 MSHR *
-Cache::getNextMSHR()
+GTTCache::getNextMSHR()
 {
     // Check both MSHR queue and write buffer for potential requests,
     // note that null does not mean there is no request, it could
@@ -1966,7 +1888,7 @@ Cache::getNextMSHR()
 
 
 PacketPtr
-Cache::getTimingPacket()
+GTTCache::getTimingPacket()
 {
     MSHR *mshr = getNextMSHR();
 
@@ -2059,7 +1981,7 @@ Cache::getTimingPacket()
 
 
 Tick
-Cache::nextMSHRReadyTime() const
+GTTCache::nextMSHRReadyTime() const
 {
     Tick nextReady = std::min(mshrQueue.nextMSHRReadyTime(),
                               writeBuffer.nextMSHRReadyTime());
@@ -2075,7 +1997,7 @@ Cache::nextMSHRReadyTime() const
 }
 
 void
-Cache::serialize(std::ostream &os)
+GTTCache::serialize(std::ostream &os)
 {
     bool dirty(isDirty());
 
@@ -2095,7 +2017,7 @@ Cache::serialize(std::ostream &os)
 }
 
 void
-Cache::unserialize(Checkpoint *cp, const std::string &section)
+GTTCache::unserialize(Checkpoint *cp, const std::string &section)
 {
     bool bad_checkpoint;
     UNSERIALIZE_SCALAR(bad_checkpoint);
@@ -2113,13 +2035,13 @@ Cache::unserialize(Checkpoint *cp, const std::string &section)
 ///////////////
 
 AddrRangeList
-Cache::CpuSidePort::getAddrRanges() const
+GTTCache::CpuSidePort::getAddrRanges() const
 {
     return cache->getAddrRanges();
 }
 
 bool
-Cache::CpuSidePort::recvTimingReq(PacketPtr pkt)
+GTTCache::CpuSidePort::recvTimingReq(PacketPtr pkt)
 {
     assert(!cache->system->bypassCaches());
 
@@ -2148,20 +2070,20 @@ Cache::CpuSidePort::recvTimingReq(PacketPtr pkt)
 }
 
 Tick
-Cache::CpuSidePort::recvAtomic(PacketPtr pkt)
+GTTCache::CpuSidePort::recvAtomic(PacketPtr pkt)
 {
     return cache->recvAtomic(pkt);
 }
 
 void
-Cache::CpuSidePort::recvFunctional(PacketPtr pkt)
+GTTCache::CpuSidePort::recvFunctional(PacketPtr pkt)
 {
     // functional request
     cache->functionalAccess(pkt, true);
 }
 
-Cache::
-CpuSidePort::CpuSidePort(const std::string &_name, Cache *_cache,
+GTTCache::
+CpuSidePort::CpuSidePort(const std::string &_name, GTTCache *_cache,
                          const std::string &_label)
     : BaseCache::CacheSlavePort(_name, _cache, _label), cache(_cache)
 {
@@ -2174,7 +2096,7 @@ CpuSidePort::CpuSidePort(const std::string &_name, Cache *_cache,
 ///////////////
 
 bool
-Cache::MemSidePort::recvTimingResp(PacketPtr pkt)
+GTTCache::MemSidePort::recvTimingResp(PacketPtr pkt)
 {
     cache->recvTimingResp(pkt);
     return true;
@@ -2182,20 +2104,20 @@ Cache::MemSidePort::recvTimingResp(PacketPtr pkt)
 
 // Express snooping requests to memside port
 void
-Cache::MemSidePort::recvTimingSnoopReq(PacketPtr pkt)
+GTTCache::MemSidePort::recvTimingSnoopReq(PacketPtr pkt)
 {
     // handle snooping requests
     cache->recvTimingSnoopReq(pkt);
 }
 
 Tick
-Cache::MemSidePort::recvAtomicSnoop(PacketPtr pkt)
+GTTCache::MemSidePort::recvAtomicSnoop(PacketPtr pkt)
 {
     return cache->recvAtomicSnoop(pkt);
 }
 
 void
-Cache::MemSidePort::recvFunctionalSnoop(PacketPtr pkt)
+GTTCache::MemSidePort::recvFunctionalSnoop(PacketPtr pkt)
 {
     // functional snoop (note that in contrast to atomic we don't have
     // a specific functionalSnoop method, as they have the same
@@ -2204,7 +2126,7 @@ Cache::MemSidePort::recvFunctionalSnoop(PacketPtr pkt)
 }
 
 void
-Cache::CacheReqPacketQueue::sendDeferredPacket()
+GTTCache::CacheReqPacketQueue::sendDeferredPacket()
 {
     // sanity check
     assert(!waitingOnRetry);
@@ -2285,8 +2207,8 @@ Cache::CacheReqPacketQueue::sendDeferredPacket()
     }
 }
 
-Cache::
-MemSidePort::MemSidePort(const std::string &_name, Cache *_cache,
+GTTCache::
+MemSidePort::MemSidePort(const std::string &_name, GTTCache *_cache,
                          const std::string &_label)
     : BaseCache::CacheMasterPort(_name, _cache, _reqQueue, _snoopRespQueue),
       _reqQueue(*_cache, *this, _snoopRespQueue, _label),
@@ -2294,11 +2216,10 @@ MemSidePort::MemSidePort(const std::string &_name, Cache *_cache,
 {
 }
 
-Cache*
-CacheParams::create()
+GTTCache*
+GTTCacheParams::create()
 {
 	assert(tags);
 
-	return new Cache(this);
+	return new GTTCache(this);
 }
-#endif//__MEM_CACHE_CACHE_IMPL_HH__

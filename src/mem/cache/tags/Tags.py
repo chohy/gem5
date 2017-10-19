@@ -75,3 +75,38 @@ class FALRU(BaseTags):
     type = 'FALRU'
     cxx_class = 'FALRU'
     cxx_header = "mem/cache/tags/fa_lru.hh"
+
+class GlobalTagTable(ClockedObject):
+    type = 'GlobalTagTable'
+    cxx_header = "mem/cache/tags/global_tag_table.hh"
+    # Get the size from the parent (cache)
+    size = Param.MemorySize(Parent.size, "capacity in bytes")
+
+    # Get the block size from the parent (system)
+    block_size = Param.Int(Parent.cache_line_size, "block size in bytes")
+
+    # Get the number of global tag table entries from the parent (cache)
+    num_tag_table_entries = Param.Int(Parent.num_tag_table_entries,
+                            "The number of tag table entries")
+
+    # Get the number of delta bits from the parent (cache)
+    num_delta_bits = Param.Int(Parent.num_delta_bits,
+                     "The number of delta bits")
+
+    # Get the number of sub arrays from the parent (cache)
+    num_subarray = Param.Int(Parent.num_subarray,
+                   "The number of sub arrays")
+
+    # Get the shared tag access latency from the parent (cache)
+    shared_tag_access_latency = \
+        Param.Cycles(Parent.shared_tag_access_latency,
+        "The tag table access latency for this cache")
+    
+    # Get the delta access latency from the parent (cache)
+    delta_access_latency = Param.Cycles(Parent.delta_access_latency,
+                           "The delta tag access latency for this cache")
+
+    # Get the data access latency from the parent (cache)
+    data_access_latency = Param.Cycles(Parent.data_access_latency,
+                         "The data access latency for this cache")
+

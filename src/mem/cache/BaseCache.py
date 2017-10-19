@@ -46,6 +46,7 @@ from Tags import *
 
 class BaseCache(MemObject):
     type = 'BaseCache'
+    abstract = True
     cxx_header = "mem/cache/base.hh"
 
     size = Param.MemorySize("Capacity")
@@ -81,3 +82,21 @@ class BaseCache(MemObject):
          "Address range for the CPU-side port (to allow striping)")
 
     system = Param.System(Parent.any, "System we belong to")
+
+class Cache(BaseCache):
+    type = 'Cache'
+    cxx_header = 'mem/cache/cache.hh'
+
+class GTTCache(BaseCache):
+    type = 'GTTCache'
+    cxx_header = 'mem/cache/gtt_cache.hh'
+
+    tags = Param.GlobalTagTable(GlobalTagTable(),"Tag store (replacement ploicy")
+
+    num_tag_table_entries = Param.Int(32, "The number of globlal tag table entries")
+    num_delta_bits = Param.Int(5, "The number of delta bits")
+    num_subarray = Param.Int(128, "The number of sub arrays")
+    
+    shared_tag_access_latency = Param.Cycles(10, "Shared tag access latency")
+    delta_access_latency = Param.Cycles(10, "Delta access latency")
+    data_access_latency = Param.Cycles(30, "Data access latency")

@@ -35,6 +35,7 @@ SimObject('BaseCache.py')
 Source('base.cc')
 Source('cache.cc')
 Source('blk.cc')
+Source('gtt_cache.cc')
 Source('mshr.cc')
 Source('mshr_queue.cc')
 

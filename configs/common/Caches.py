@@ -46,7 +46,7 @@ from m5.objects import *
 # starting point, and specific parameters can be overridden in the
 # specific instantiations.
 
-class L1Cache(BaseCache):
+class L1Cache(Cache):
     assoc = 2
     hit_latency = 2
     response_latency = 2
@@ -54,7 +54,7 @@ class L1Cache(BaseCache):
     tgts_per_mshr = 20
     is_top_level = True
 
-class L2Cache(BaseCache):
+class L2Cache(Cache):
     assoc = 8
     hit_latency = 10
     response_latency = 10
@@ -62,7 +62,7 @@ class L2Cache(BaseCache):
     tgts_per_mshr = 12
     write_buffers = 8
 
-class L3Cache(BaseCache):
+class L3Cache(Cache):
     assoc = 16
     hit_latency = 20
     response_latency = 20
@@ -70,7 +70,7 @@ class L3Cache(BaseCache):
     tgts_per_mshr = 20
     write_buffers = 32
 
-class L4Cache(BaseCache):
+class L4Cache(Cache):
     assoc = 32
     hit_latency = 40
     response_latency = 40
@@ -78,7 +78,7 @@ class L4Cache(BaseCache):
     tgts_per_mshr = 40
     write_buffers = 64
 
-class IOCache(BaseCache):
+class IOCache(Cache):
     assoc = 8
     hit_latency = 50
     response_latency = 50
@@ -88,7 +88,7 @@ class IOCache(BaseCache):
     forward_snoops = False
     is_top_level = True
 
-class PageTableWalkerCache(BaseCache):
+class PageTableWalkerCache(Cache):
     assoc = 2
     hit_latency = 2
     response_latency = 2

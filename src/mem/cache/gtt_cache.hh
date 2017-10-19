@@ -46,18 +46,18 @@
 
 /**
  * @file
- * Describes a cache based on template policies.
+ * Describes a cache based on the global tag table.
  */
 
-#ifndef __CACHE_HH__
-#define __CACHE_HH__
+#ifndef __GTTCACHE_HH__
+#define __GTTCACHE_HH__
 
 #include "base/misc.hh" // fatal, panic, and warn
 #include "mem/cache/base.hh"
 #include "mem/cache/blk.hh"
 #include "mem/cache/mshr.hh"
-#include "mem/cache/tags/base.hh"
-#include "params/Cache.hh"
+#include "mem/cache/tags/global_tag_table.hh"
+#include "params/GTTCache.hh"
 #include "sim/eventq.hh"
 
 //Forward decleration
@@ -68,7 +68,7 @@ class BasePrefetcher;
  * supplying different template policies. TagStore handles all tag and data
  * storage @sa TagStore, \ref gem5MemorySystem "gem5 Memory System"
  */
-class Cache : public BaseCache
+class GTTCache : public BaseCache
 {
   public:
 
@@ -86,7 +86,7 @@ class Cache : public BaseCache
       private:
 
         // a pointer to our specific cache implementation
-        Cache *cache;
+        GTTCache *cache;
 
       protected:
 
@@ -102,7 +102,7 @@ class Cache : public BaseCache
 
       public:
 
-        CpuSidePort(const std::string &_name, Cache *_cache,
+        CpuSidePort(const std::string &_name, GTTCache *_cache,
                     const std::string &_label);
 
     };
@@ -118,12 +118,12 @@ class Cache : public BaseCache
 
       protected:
 
-        Cache &cache;
+        GTTCache &cache;
         SnoopRespPacketQueue &snoopRespQueue;
 
       public:
 
-        CacheReqPacketQueue(Cache &cache, MasterPort &port,
+        CacheReqPacketQueue(GTTCache &cache, MasterPort &port,
                             SnoopRespPacketQueue &snoop_resp_queue,
                             const std::string &label) :
             ReqPacketQueue(cache, port, label), cache(cache),
@@ -152,7 +152,7 @@ class Cache : public BaseCache
         SnoopRespPacketQueue _snoopRespQueue;
 
         // a pointer to our specific cache implementation
-        Cache *cache;
+        GTTCache *cache;
 
       protected:
 
@@ -166,12 +166,12 @@ class Cache : public BaseCache
 
       public:
 
-        MemSidePort(const std::string &_name, Cache *_cache,
+        MemSidePort(const std::string &_name, GTTCache *_cache,
                     const std::string &_label);
     };
 
     /** Tag and data Storage */
-    BaseTags *tags;
+    GlobalTagTable *tags;
 
     /** Prefetcher */
     BasePrefetcher *prefetcher;
@@ -401,12 +401,12 @@ class Cache : public BaseCache
     Tick nextMSHRReadyTime() const;
 
   public:
-    typedef CacheParams Params;
+    typedef GTTCacheParams Params;
     /** Instantiates a basic cache object. */
-    Cache(const Params *p);
+    GTTCache(const Params *p);
 
     /** Non-default destructor is needed to deallocate memory. */
-    virtual ~Cache();
+    virtual ~GTTCache();
 
     void regStats();
 
@@ -428,9 +428,9 @@ class Cache : public BaseCache
 class CacheBlkVisitorWrapper : public CacheBlkVisitor
 {
   public:
-    typedef bool (Cache::*VisitorPtr)(CacheBlk &blk);
+    typedef bool (GTTCache::*VisitorPtr)(CacheBlk &blk);
 
-    CacheBlkVisitorWrapper(Cache &_cache, VisitorPtr _visitor)
+    CacheBlkVisitorWrapper(GTTCache &_cache, VisitorPtr _visitor)
         : cache(_cache), visitor(_visitor) {}
 
     bool operator()(CacheBlk &blk) M5_ATTR_OVERRIDE {
@@ -438,7 +438,7 @@ class CacheBlkVisitorWrapper : public CacheBlkVisitor
     }
 
   private:
-    Cache &cache;
+    GTTCache &cache;
     VisitorPtr visitor;
 };
 
@@ -475,4 +475,4 @@ class CacheBlkIsDirtyVisitor : public CacheBlkVisitor
     bool _isDirty;
 };
 
-#endif // __CACHE_HH__
+#endif // __GTTCACHE_HH__
