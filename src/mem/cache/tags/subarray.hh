@@ -7,6 +7,7 @@
 
 #include <cassert>
 
+#include "mem/cache/tags/tagtable.hh"
 #include "mem/cache/blk.hh"
 
 /**
@@ -18,6 +19,12 @@ class SubArray
   public:
     /** Cache blocks in this sub array. */
     BlkType **blks;
+	/** The tag table entry which a sub arrays is allocated **/
+	TableEntry<Addr, SubArray<BlkType>>* entry;
+
+	SubArray() {
+		entry = NULL;
+	}
 
 	/**
 	 * Find a block matching the tag in this sub array.
@@ -27,14 +34,15 @@ class SubArray
 	 * @return Pointer to the block if found.
 	 */
 	BlkType* findBlk(Addr index, Addr tag, bool is_secure) const;
-	void invalidate();
+	//void invalidate();
 };
 
 template <class BlkType>
 BlkType*
 SubArray<BlkType>::findBlk(Addr index, Addr tag, bool is_secure) const
 {
-	if (blks[index]->tag == tag)
+	if (blks[index]->tag == tag && blks[index]->isValid() &&
+            blks[index]->isSecure() == is_secure)
 		return blks[index];
 	else
 		return NULL;

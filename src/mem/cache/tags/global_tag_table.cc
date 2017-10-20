@@ -9,11 +9,12 @@
 
 GlobalTagTable::GlobalTagTable(const Params *p)
 	:ClockedObject(p), blkSize(p->block_size), size(p->size),
+	cache(nullptr),
 	numTagTableEntries(p->num_tag_table_entries),
 	numDeltaBits(p->num_delta_bits),
 	numSubArrays(p->num_subarray),
-        subArraySize(p->size/p->num_subarray),
-        sharedTagAccessLatency(p->shared_tag_access_latency),
+    subArraySize(p->size/(p->num_subarray*p->block_size)),
+    sharedTagAccessLatency(p->shared_tag_access_latency),
 	deltaAccessLatency(p->delta_access_latency),
 	dataAccessLatency(p->data_access_latency)
 {

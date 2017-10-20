@@ -215,6 +215,12 @@ class GlobalTagTable : public ClockedObject
     }
 
 
+	int
+	getSubArraySize() const
+	{
+		return subArraySize;
+	}
+
 	/**
 	 * Invalidate the given blck
 	 * @param blk The block to invalidate.
@@ -242,6 +248,7 @@ class GlobalTagTable : public ClockedObject
         assert(entry);
         assert(entry->valid_bit);
 
+		/*
         //unsigned mask = entry->subArrayMask;
         std::vector<SubArrayType*>::iterator it;
         for (it = entry->subArray.begin(); it < entry->subArray.end(); it++)
@@ -259,6 +266,14 @@ class GlobalTagTable : public ClockedObject
             }
             //mask = mask >> 1;
         }
+		*/
+
+		std::vector<SubArrayType*>::iterator it;
+		while (!(entry->subArray.empty())) {
+			it = entry->subArray.begin();
+			(*it)->entry = NULL;
+			entry->subArray.erase(it);
+		}
 
         entry->valid_bit = false;
         //entry->subArrayMask = 0;
@@ -286,20 +301,25 @@ class GlobalTagTable : public ClockedObject
 		BlkType *blk = NULL;
 
 		EntryType *entry = table->findEntry(shared_tag);
+                tableEntryAccesses += 1;
+
 		if (entry == NULL) {
 			//Maybe here need stats update.
 			lat = sharedTagAccessLatency;
 			return blk;
 		}
 
+		entry->accessCnt += 1;
+
 		std::vector<SubArrayType*>::iterator it;
         //unsigned mask = entry->subArrayMask;
 		for (it = entry->subArray.begin(); it < entry->subArray.end(); it++) {
 			//if (mask % 2 == 1)
-				blk = (*it)->findBlk(tag, index, is_secure);
+			blk = (*it)->findBlk(tag, index, is_secure);
 			//mask = mask >> 1;
 
-			if (blk) return blk;
+			if (blk) 
+			    return blk;
 		}
 
 		return NULL;
@@ -327,6 +347,19 @@ class GlobalTagTable : public ClockedObject
 	}
 
 	/**
+	* Finds the tag table entry with given address in the cache, do not update
+	* replacement data.
+	* i.e. This is a no-side-effect find of a block.
+	* @param addr The address to find.
+	* @param is_secrue Ture if the target memory space is secure.
+	* @return Pointer to the cache block if found.
+	*/
+	EntryType* findEntry(Addr addr) const
+	{
+		return table->findEntry(extractSharedTag(addr));
+	}
+
+	/**
 	 * Find an invalid block to evict for the address provided.
 	 * If there are no invalid blocks, this will return the block
 	 * in two case.
@@ -345,15 +378,21 @@ class GlobalTagTable : public ClockedObject
 		assert(entry != NULL);
 
 		int way = entry->subArray.size();
-		if (way <= 2) {
-			subarray = entry->subArray.at(2);
+		assert(way > 0);
+		if (way == 1) {
+			subarray = entry->subArray.at(0);
+			blk = subarray->blks[extractIndex(addr)];
+			return blk;
+		}
+		else if (way == 2) {
+			subarray = entry->subArray.at(1);
 			blk = subarray->blks[extractIndex(addr)];
 			return blk;
 		}
 		else {
-			int idx = random_mt.random<int>(3, way - 1);
-			assert(idx < way);
-			assert(idx > 2);
+			int idx = random_mt.random<int>(2, way - 1);
+			assert((idx-1) < way);
+			assert(idx > 1);
 			subarray = entry->subArray.at(idx);
 			blk = subarray->blks[extractIndex(addr)];
 			return blk;
@@ -418,6 +457,9 @@ class GlobalTagTable : public ClockedObject
 			occupancies[blk->srcMasterId]--;
 
 			blk->invalidate();
+
+			EntryType *entry = findEntry(pkt->getAddr());
+			entry->replacementCnt += 1;
 		}
 
 		blk->isTouched = true;
@@ -439,21 +481,55 @@ class GlobalTagTable : public ClockedObject
 
 	/**
 	* Insert the new global tag table entry.
-	* @param pkt Packet holding the address to update.
+	* @param addr The address to update.
 	* @param entry The entry to update.
 	*/
-	void insertEntry(PacketPtr pkt, EntryType *entry)
+	void insertEntry(Addr addr, EntryType *entry)
 	{
-		Addr addr = pkt->getAddr();
+		//Addr addr = pkt->getAddr();
+		assert(entry->valid_bit == false);
 
+		/*
 		if (entry->valid_bit == true) {
 			invalidateEntry(entry);
 		}
+		*/
 
 		entry->valid_bit = true;
 
 		// Set shared tag for new entry. Caller is responsible for setting status.
 		entry->shared_tag = extractSharedTag(addr);
+	}
+
+	/**
+	 * Allocate new sub array to the tag entry.
+	 * @param entry The entry to be allocated.
+	 * @return true if the allocation is successed.
+	 */
+	bool allocateSubArray(EntryType *entry) {
+		int valid_entry_cnt = 0;
+		int valid_subarray_cnt = 0;
+
+		for (int i = 0; i < numTagTableEntries; i++) {
+			if (table->entries[i].valid_bit == true) valid_entry_cnt++;
+		}
+
+		for (int i = 0; i < numSubArrays; i++) {
+			if (subArrays[i].entry != NULL) valid_subarray_cnt++;
+		}
+
+		if ((numSubArrays - valid_subarray_cnt) <= (numTagTableEntries - valid_entry_cnt))
+			return false;
+		
+		for (int i = 0; i < numSubArrays; i++) {
+			if (subArrays[i].entry == NULL) {
+				entry->subArray.push_back(&subArrays[i]);
+				subArrays[i].entry = entry;
+				return true;
+			}
+		}
+		//There is no availabe sub array.
+		return false;
 	}
 
 	/**
@@ -466,15 +542,15 @@ class GlobalTagTable : public ClockedObject
 		return (addr >> tagShift);
 	}
 
-        /**
-         * Calculate the block offset of an address.
-         * @param addr the address to get the offset of.
-         * @return the block offset.
-        */
-        int extractBlkOffset(Addr addr) const
-        {
-            return (addr & (Addr)(blkSize-1));
-        }
+    /**
+     * Calculate the block offset of an address.
+     * @param addr the address to get the offset of.
+     * @return the block offset.
+     */
+    int extractBlkOffset(Addr addr) const
+    {
+        return (addr & (Addr)(blkSize-1));
+    }
 
         /**
 	* Generate the index from the given addrss.

@@ -1303,91 +1303,146 @@ GTTCache::writebackBlk(CacheBlk *blk)
 void
 GTTCache::memWriteback()
 {
-    CacheBlkVisitorWrapper visitor(*this, &GTTCache::writebackVisitor);
-    tags->forEachBlk(visitor);
+	CacheBlkVisitorWrapper visitor(*this, &GTTCache::writebackVisitor);
+	tags->forEachBlk(visitor);
 }
 
 void
 GTTCache::memInvalidate()
 {
-    CacheBlkVisitorWrapper visitor(*this, &GTTCache::invalidateVisitor);
-    tags->forEachBlk(visitor);
+	CacheBlkVisitorWrapper visitor(*this, &GTTCache::invalidateVisitor);
+	tags->forEachBlk(visitor);
 }
 
 bool
 GTTCache::isDirty() const
 {
-    CacheBlkIsDirtyVisitor visitor;
-    tags->forEachBlk(visitor);
+	CacheBlkIsDirtyVisitor visitor;
+	tags->forEachBlk(visitor);
 
-    return visitor.isDirty();
+	return visitor.isDirty();
 }
 
 bool
 GTTCache::writebackVisitor(CacheBlk &blk)
 {
-    if (blk.isDirty()) {
-        assert(blk.isValid());
+	if (blk.isDirty()) {
+		assert(blk.isValid());
 
-        Request request(tags->regenerateBlkAddr(blk.tag, blk.set),
-                        blkSize, 0, Request::funcMasterId);
-        request.taskId(blk.task_id);
+		Request request(tags->regenerateBlkAddr(blk.tag, blk.set),
+			blkSize, 0, Request::funcMasterId);
+		request.taskId(blk.task_id);
 
-        Packet packet(&request, MemCmd::WriteReq);
-        packet.dataStatic(blk.data);
+		Packet packet(&request, MemCmd::WriteReq);
+		packet.dataStatic(blk.data);
 
-        memSidePort->sendFunctional(&packet);
+		memSidePort->sendFunctional(&packet);
 
-        blk.status &= ~BlkDirty;
-    }
+		blk.status &= ~BlkDirty;
+	}
 
-    return true;
+	return true;
 }
 
 bool
 GTTCache::invalidateVisitor(CacheBlk &blk)
 {
 
-    if (blk.isDirty())
-        warn_once("Invalidating dirty cache lines. Expect things to break.\n");
+	if (blk.isDirty())
+		warn_once("Invalidating dirty cache lines. Expect things to break.\n");
 
-    if (blk.isValid()) {
-        assert(!blk.isDirty());
-        tags->invalidateBlk(&blk);
-        blk.invalidate();
-    }
+	if (blk.isValid()) {
+		assert(!blk.isDirty());
+		tags->invalidateBlk(&blk);
+		blk.invalidate();
+	}
 
-    return true;
+	return true;
 }
 
 CacheBlk*
 GTTCache::allocateBlock(Addr addr, bool is_secure, PacketList &writebacks)
 {
-    CacheBlk *blk = tags->findVictimBlk(addr);
+	TableEntry <Addr, SubArray<CacheBlk>> *entry = tags->findEntry(addr);
+	CacheBlk *blk = NULL;
 
-    if (blk->isValid()) {
-        Addr repl_addr = tags->regenerateBlkAddr(blk->tag, blk->set);
-        MSHR *repl_mshr = mshrQueue.findMatch(repl_addr, blk->isSecure());
-        if (repl_mshr) {
-            // must be an outstanding upgrade request
-            // on a block we're about to replace...
-            assert(!blk->isWritable() || blk->isDirty());
-            assert(repl_mshr->needsExclusive());
-            // too hard to replace block with transient state
-            // allocation failed, block not inserted
-            return NULL;
-        } else {
-            DPRINTF(Cache, "replacement: replacing %#llx (%s) with %#llx (%s): %s\n",
-                    repl_addr, blk->isSecure() ? "s" : "ns",
-                    addr, is_secure ? "s" : "ns",
-                    blk->isDirty() ? "writeback" : "clean");
+	// Global tag table hit
+	if (entry) {
+		blk = tags->findVictimBlk(addr);
 
-            if (blk->isDirty()) {
-                // Save writeback packet for handling by caller
-                writebacks.push_back(writebackBlk(blk));
-            }
-        }
-    }
+		if (blk->isValid()) {
+			Addr repl_addr = tags->regenerateBlkAddr(blk->tag, blk->set);
+			MSHR *repl_mshr = mshrQueue.findMatch(repl_addr, blk->isSecure());
+
+			if (repl_mshr) {
+				// must be an outstanding upgrade request
+				// on a block we're about to replace...
+				assert(!blk->isWritable() || blk->isDirty());
+				assert(repl_mshr->needsExclusive());
+				// too hard to replace block with transient state
+				// allocation failed, block not inserted
+				return NULL;
+			}
+			else {
+				DPRINTF(Cache, "replacement: replacing %#llx (%s) with %#llx (%s): %s\n",
+					repl_addr, blk->isSecure() ? "s" : "ns",
+					addr, is_secure ? "s" : "ns",
+					blk->isDirty() ? "writeback" : "clean");
+
+				if (blk->isDirty()) {
+					// Save writeback packet for handling by caller
+					writebacks.push_back(writebackBlk(blk));
+				}
+			}
+		}
+	}
+	// Global tag table miss
+	// We also need to update the global tag table.
+	else {
+		entry = tags->findVictimEntry();
+
+		if (entry->valid_bit)
+		{
+			// invalidate sub arrays of vicitim entry.
+			std::vector<SubArray<CacheBlk>*>::iterator it;
+			for (it = entry->subArray.begin(); it < entry->subArray.end(); it++)
+			{
+				for (int i = 0; i < tags->getSubArraySize(); i++)
+				{
+					blk = (*it)->blks[i];
+					Addr repl_addr = tags->regenerateBlkAddr(blk->tag, blk->set);
+					MSHR *repl_mshr = mshrQueue.findMatch(repl_addr, blk->isSecure());
+
+					if (repl_mshr) {
+						// must be an outstanding upgrade request
+						// on a block we're about to replace...
+						assert(!blk->isWritable() || blk->isDirty());
+						assert(repl_mshr->needsExclusive());
+						// too hard to replace block with transient state
+						// allocation failed, block not inserted
+						return NULL;
+					}
+					else if (blk->isDirty()) {
+						// Save writeback packet for handling by caller
+						writebacks.push_back(writebackBlk(blk));
+					}
+					else {
+						tags->invalidateBlk(blk);
+						blk->invalidate();
+					}
+				}
+			}
+
+			tags->invalidateEntry(entry);
+		}
+
+		//tags->invalidateEntry(entry);
+		//entry = tags->findVictimEntry();
+		tags->insertEntry(addr, entry);
+		tags->allocateSubArray(entry);
+		blk = tags->findVictimBlk(addr);
+		assert(!(blk->isValid()));
+	}
 
     return blk;
 }
