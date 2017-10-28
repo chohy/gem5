@@ -315,11 +315,18 @@ class GlobalTagTable : public ClockedObject
         //unsigned mask = entry->subArrayMask;
 		for (it = entry->subArray.begin(); it < entry->subArray.end(); it++) {
 			//if (mask % 2 == 1)
-			blk = (*it)->findBlk(tag, index, is_secure);
+			blk = (*it)->findBlk(index, tag, is_secure);
 			//mask = mask >> 1;
 
-			if (blk) 
-			    return blk;
+			if (blk) {
+				if (entry->subArray.size() > 1) {
+					SubArrayType* temp_subarray = entry->subArray.at(1);
+					(*it) = entry->subArray.at(1);
+					entry->subArray.at(1) = entry->subArray.at(0);
+					entry->subArray.at(0) = temp_subarray;
+					return blk;
+				}
+			}
 		}
 
 		return NULL;
@@ -338,11 +345,25 @@ class GlobalTagTable : public ClockedObject
 		Addr index = extractIndex(addr);
 		BlkType *blk = NULL;
 
+		/*
 		for (int i = 0; i < numSubArrays; i++) {
 			blk = subArrays[i].findBlk(index, tag, is_secure);
 			if (blk)
 				return blk;
 		}
+		*/
+
+		EntryType* entry = table->findEntry(extractSharedTag(addr));
+		if (entry == NULL)
+			return NULL;
+
+		std::vector<SubArrayType*>::iterator it;
+		for (it = entry->subArray.begin(); it < entry->subArray.end(); it++) {
+			(*it)->findBlk(index, tag, is_secure);
+			if (blk)
+				return blk;
+		}
+
 		return NULL;
 	}
 
@@ -487,6 +508,7 @@ class GlobalTagTable : public ClockedObject
 	void insertEntry(Addr addr, EntryType *entry)
 	{
 		//Addr addr = pkt->getAddr();
+		assert(!table->findEntry(extractSharedTag(addr)));
 		assert(entry->valid_bit == false);
 
 		/*
@@ -521,6 +543,7 @@ class GlobalTagTable : public ClockedObject
 		if ((numSubArrays - valid_subarray_cnt) <= (numTagTableEntries - valid_entry_cnt))
 			return false;
 		
+		// Move the most recently used block to 0 index.
 		for (int i = 0; i < numSubArrays; i++) {
 			if (subArrays[i].entry == NULL) {
 				entry->subArray.push_back(&subArrays[i]);
