@@ -46,7 +46,87 @@ GTTCache::~GTTCache()
 void
 GTTCache::regStats()
 {
+    using namespace Stats;
+
     BaseCache::regStats();
+
+    for (int access_idx = 0; access_idx < MemCmd::NUM_MEM_CMDS; ++access_idx) {
+        MemCmd cmd(access_idx);
+        const std::string &cstr = cmd.toString();
+
+        tagtable_hits[access_idx]
+            .init(system->maxMasters())
+            .name(name() + "." + cstr + "_tagtable_hits")
+            .desc("number of" + cstr + " tagtable hits")
+            .flags(total | nozero | nonan)
+            ;
+        delta_hits[access_idx]
+            .init(system->maxMasters())
+            .name(name() + "." + cstr + "_delta_hits")
+            .desc("number of" + cstr + " delta hits")
+            .flags(total | nozero | nonan)
+            ;
+        tagtable_misses[access_idx]
+            .init(system->maxMasters())
+            .name(name() + "." + cstr + "_tagtable_misses")
+            .desc("number of" + cstr + " tagtable misses")
+            .flags(total | nozero | nonan)
+            ;
+        delta_misses[access_idx]
+            .init(system->maxMasters())
+            .name(name() + "." + cstr + "_delta_misses")
+            .desc("number of" + cstr + " delta misses")
+            .flags(total | nozero | nonan)
+            ;
+
+        for (int i = 0; i < system->maxMasters(); i++) {
+            tagtable_hits[access_idx].subname(i, system->getMasterName(i));
+            delta_hits[access_idx].subname(i, system->getMasterName(i));
+            tagtable_misses[access_idx].subname(i, system->getMasterName(i));
+            delta_misses[access_idx].subname(i, system->getMasterName(i));
+        }
+    }
+
+// These macros make it easier to sum the right subset of commands and
+// to change the subset of commands that are considered "demand" vs
+// "non-demand"
+#define SUM_DEMAND(s) \
+    (s[MemCmd::ReadReq] + s[MemCmd::WriteReq] + s[MemCmd::ReadExReq])
+
+// should writebacks be included here?  prior code was inconsistent...
+#define SUM_NON_DEMAND(s) \
+    (s[MemCmd::SoftPFReq] + s[MemCmd::HardPFReq])
+
+    tagtable_overallHits
+        .name(name() + ".tagtable_overall_hits")
+        .desc("number of tagtable overall hits")
+        .flags(total | nozero | nonan)
+        ;
+    delta_overallHits
+        .name(name() + ".delta_overall_hits")
+        .desc("number of delta overall hits")
+        .flags(total | nozero | nonan)
+        ;
+    tagtable_overallMisses
+        .name(name() + ".tagtable_overall_misses")
+        .desc("number of tagtable overall misses")
+        .flags(total | nozero | nonan)
+        ;
+    delta_overallMisses
+        .name(name() + ".delta_overall_misses")
+        .desc("number of delta overall misses")
+        .flags(total | nozero | nonan)
+        ;
+    tagtable_overallHits = SUM_DEMAND(tagtable_hits) + SUM_NON_DEMAND(tagtable_hits);
+    delta_overallHits = SUM_DEMAND(delta_hits) + SUM_NON_DEMAND(delta_hits);
+    tagtable_overallMisses = SUM_DEMAND(tagtable_misses) + SUM_NON_DEMAND(tagtable_misses);
+    delta_overallMisses = SUM_DEMAND(delta_misses) + SUM_NON_DEMAND(delta_misses);
+    for (int i = 0; i < system->maxMasters(); i++) {
+        tagtable_overallHits.subname(i, system->getMasterName(i));
+        delta_overallHits.subname(i, system->getMasterName(i));
+        tagtable_overallMisses.subname(i, system->getMasterName(i));
+        delta_overallMisses.subname(i, system->getMasterName(i));
+    }
 }
 
 void
@@ -317,6 +397,11 @@ GTTCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
         // nothing else to do; writeback doesn't expect response
         assert(!pkt->needsResponse());
         std::memcpy(blk->data, pkt->getConstPtr<uint8_t>(), blkSize);
+
+        //Cho: write-through /////////////////////////
+        writebacks.push_back(writethroughBlk(blk)); 
+        //////////////////////////////////////////////
+
         DPRINTF(Cache, "%s new state is %s\n", __func__, blk->print());
         incHitCount(pkt);
         return true;
@@ -556,7 +641,7 @@ GTTCache::recvTimingReq(PacketPtr pkt)
         }
     }
     else {
-        DPRINTF(Cho, "%s", pkt->print());
+        //DPRINTF(Cho, "%s", pkt->print());
         // miss
 
         Addr blk_addr = blockAlign(pkt->getAddr());
@@ -1332,6 +1417,34 @@ GTTCache::writebackBlk(CacheBlk *blk)
     return writeback;
 }
 
+PacketPtr
+GTTCache::writethroughBlk(CacheBlk *blk)
+{
+    assert(blk && blk->isValid() && blk->isDirty());
+
+    writebacks[Request::wbMasterId]++;
+
+    Request *writebackReq =
+        new Request(tags->regenerateBlkAddr(blk->tag, blk->set), blkSize, 0,
+            Request::wbMasterId);
+    if (blk->isSecure())
+        writebackReq->setFlags(Request::SECURE);
+
+    writebackReq->taskId(blk->task_id);
+    //blk->task_id = ContextSwitchTaskId::Unknown;
+    //blk->tickInserted = curTick();
+
+    PacketPtr writeback = new Packet(writebackReq, MemCmd::Writeback);
+    if (blk->isWritable()) {
+        writeback->setSupplyExclusive();
+    }
+    writeback->allocate();
+    std::memcpy(writeback->getPtr<uint8_t>(), blk->data, blkSize);
+
+    blk->status &= ~BlkDirty;
+    return writeback;
+}
+
 void
 GTTCache::memWriteback()
 {
@@ -1410,7 +1523,7 @@ GTTCache::allocateBlock(Addr addr, bool is_secure, PacketList &writebacks)
             MSHR *repl_mshr = mshrQueue.findMatch(repl_addr, blk->isSecure());
 
             if (repl_mshr) {
-                DPRINTF(Cho, "MSHR: %sPkt: %s", repl_mshr->print(), repl_mshr->getTarget()->pkt->print());
+                //DPRINTF(Cho, "MSHR: %sPkt: %s", repl_mshr->print(), repl_mshr->getTarget()->pkt->print());
                 // must be an outstanding upgrade request
                 // on a block we're about to replace...
                 assert(!blk->isWritable() || blk->isDirty());
@@ -1426,6 +1539,7 @@ GTTCache::allocateBlock(Addr addr, bool is_secure, PacketList &writebacks)
                     blk->isDirty() ? "writeback" : "clean");
 
                 if (blk->isDirty()) {
+                    DPRINTF(Cho, "writeback when block miss. Addr: %s\n", addr);
                     // Save writeback packet for handling by caller
                     writebacks.push_back(writebackBlk(blk));
                 }
@@ -1461,6 +1575,7 @@ GTTCache::allocateBlock(Addr addr, bool is_secure, PacketList &writebacks)
                     }
                     else */
                     if (blk->isDirty()) {
+                        DPRINTF(Cho, "writeback when tag table miss. Addr: %s\n",addr);
                         // Save writeback packet for handling by caller
                         writebacks.push_back(writebackBlk(blk));
                     }

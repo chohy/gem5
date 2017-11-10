@@ -8,6 +8,7 @@
 #include "base/callback.hh"
 #include "base/random.hh"
 #include "base/statistics.hh"
+#include "debug/ChoTag.hh"
 #include "mem/cache/tags/base.hh"
 #include "mem/cache/tags/subarray.hh"
 #include "mem/cache/tags/tagtable.hh"
@@ -129,8 +130,8 @@ class GlobalTagTable : public ClockedObject
 
     /** Number of tag table entries consulted over all accesses. */
     Stats::Scalar tableEntryAccesses;
-    /** Number of tags consulted over all accesses. */
-    Stats::Scalar tagAccesses;
+    /** Number of deltas consulted over all accesses. */
+    Stats::Scalar deltaAccesses;
     /** Number of data blocks consulted over all accesses. */
     Stats::Scalar dataAccesses;
 
@@ -248,26 +249,6 @@ class GlobalTagTable : public ClockedObject
         assert(entry);
         assert(entry->valid_bit);
 
-		/*
-        //unsigned mask = entry->subArrayMask;
-        std::vector<SubArrayType*>::iterator it;
-        for (it = entry->subArray.begin(); it < entry->subArray.end(); it++)
-        {
-            //if (mask % 2 == 1)
-            for (int j = 0; j < subArraySize; j++){
-                if ((*it)->blks[j]->isValid())
-                {
-                    occupancies[(*it)->blks[j]->srcMasterId]--;
-                    (*it)->blks[j]->srcMasterId = Request::invldMasterId;
-                    (*it)->blks[j]->task_id = ContextSwitchTaskId::Unknown;
-                    (*it)->blks[j]->tickInserted = curTick();
-                    (*it)->blks[j]->invalidate();
-                }
-            }
-            //mask = mask >> 1;
-        }
-		*/
-
 		std::vector<SubArrayType*>::iterator it;
 		while (!(entry->subArray.empty())) {
 			it = entry->subArray.begin();
@@ -276,9 +257,12 @@ class GlobalTagTable : public ClockedObject
 		}
 
         entry->valid_bit = false;
-        //entry->subArrayMask = 0;
         entry->accessCnt = 0;
         entry->replacementCnt = 0;
+        for (int i = 0; i < subArraySize; i++) {
+            entry->MRUArray[0][i] = 0;
+            entry->MRUArray[1][i] = 0;
+        }
     }
 
 	/**
@@ -301,31 +285,37 @@ class GlobalTagTable : public ClockedObject
 		BlkType *blk = NULL;
 
 		EntryType *entry = table->findEntry(shared_tag);
-                tableEntryAccesses += 1;
+        tableEntryAccesses += numTagTableEntries;
 
 		if (entry == NULL) {
 			//Maybe here need stats update.
 			lat = sharedTagAccessLatency;
 			return blk;
 		}
+        entry->accessCnt += 1;
+        deltaAccesses += entry->subArray.size();
 
-		entry->accessCnt += 1;
-
+        lat += deltaAccessLatency;
 		std::vector<SubArrayType*>::iterator it;
-        //unsigned mask = entry->subArrayMask;
 		for (it = entry->subArray.begin(); it < entry->subArray.end(); it++) {
-			//if (mask % 2 == 1)
 			blk = (*it)->findBlk(index, tag, is_secure);
-			//mask = mask >> 1;
 
 			if (blk) {
-				if (entry->subArray.size() > 1) {
-					SubArrayType* temp_subarray = entry->subArray.at(1);
-					(*it) = entry->subArray.at(1);
-					entry->subArray.at(1) = entry->subArray.at(0);
-					entry->subArray.at(0) = temp_subarray;
-					return blk;
-				}
+                if (blk->whenReady > curTick()
+                    && cache->ticksToCycles(blk->whenReady - curTick())
+                    > (lat + dataAccessLatency))
+                    lat = cache->ticksToCycles(blk->whenReady - curTick());
+                else lat += dataAccessLatency;
+
+                //MRU block update
+                int position = std::distance(entry->subArray.begin(), it);
+                entry->MRUArray[1][index] = entry->MRUArray[0][index];
+                entry->MRUArray[0][index] = position;
+                
+                blk->refCount += 1;
+                dataAccesses += 1;
+
+                return blk;
 			}
 		}
 
@@ -344,14 +334,6 @@ class GlobalTagTable : public ClockedObject
 		Addr tag = extractTag(addr);
 		Addr index = extractIndex(addr);
 		BlkType *blk = NULL;
-
-		/*
-		for (int i = 0; i < numSubArrays; i++) {
-			blk = subArrays[i].findBlk(index, tag, is_secure);
-			if (blk)
-				return blk;
-		}
-		*/
 
 		EntryType* entry = table->findEntry(extractSharedTag(addr));
 		if (entry == NULL)
@@ -399,30 +381,34 @@ class GlobalTagTable : public ClockedObject
 		assert(entry != NULL);
 
 		int way = entry->subArray.size();
+        Addr index = extractIndex(addr);
 		assert(way > 0);
 		if (way == 1) {
 			subarray = entry->subArray.at(0);
-			blk = subarray->blks[extractIndex(addr)];
+			blk = subarray->blks[index];
 			return blk;
 		}
 		else if (way == 2) {
-			subarray = entry->subArray.at(1);
-			blk = subarray->blks[extractIndex(addr)];
+			subarray = entry->subArray.at(entry->MRUArray[1][index]);
+            blk = subarray->blks[index];
 			return blk;
 		}
 		else {
-			int idx = random_mt.random<int>(2, way - 1);
+            int idx;
+            do idx = random_mt.random<int>(0, way - 1);
+            while (idx != entry->MRUArray[0][index] && idx != entry->MRUArray[1][index]);
+
 			assert((idx-1) < way);
-			assert(idx > 1);
+			//assert(idx > 1);
 			subarray = entry->subArray.at(idx);
-			blk = subarray->blks[extractIndex(addr)];
+			blk = subarray->blks[index];
 			return blk;
 		}
 	}
 
 	/**
 	 * Find an invalid tag table entry.
-	 * If there are no invalid blocks, this will return the entry
+	 * If there are no invalid entry, this will return the entry
 	 * which is a least accessed entry.
 	 * @return The candidate entry.
 	 */
@@ -463,6 +449,7 @@ class GlobalTagTable : public ClockedObject
 			}
 		}
 
+        EntryType *entry = findEntry(pkt->getAddr());
 		// If we're replacing a block that was previously valid update
 		// stats for it. This can't be done in findBlock() because a
 		// found block might not acually be replaced there if the
@@ -479,7 +466,6 @@ class GlobalTagTable : public ClockedObject
 
 			blk->invalidate();
 
-			EntryType *entry = findEntry(pkt->getAddr());
 			entry->replacementCnt += 1;
 		}
 
@@ -496,8 +482,21 @@ class GlobalTagTable : public ClockedObject
 		blk->tickInserted = curTick();
 
 		// We only need to write into one tag and one data block.
-		tagAccesses += 1;
+		deltaAccesses += 1;
 		dataAccesses += 1;
+
+        //MRU block update
+        Addr index = extractIndex(addr);
+        int position = 0;
+        for (int i = 0; i < entry->subArray.size(); i++) {
+            if (entry->subArray.at(i)->findBlk(index, extractTag(addr),
+                pkt->isSecure())) {
+                position = i;
+                break;
+            }
+        }
+        entry->MRUArray[1][index] = entry->MRUArray[0][index];
+        entry->MRUArray[0][index] = position;
 	}
 
 	/**
@@ -507,15 +506,10 @@ class GlobalTagTable : public ClockedObject
 	*/
 	void insertEntry(Addr addr, EntryType *entry)
 	{
-		//Addr addr = pkt->getAddr();
 		assert(!table->findEntry(extractSharedTag(addr)));
 		assert(entry->valid_bit == false);
 
-		/*
-		if (entry->valid_bit == true) {
-			invalidateEntry(entry);
-		}
-		*/
+        tableEntryAccesses += 1;
 
 		entry->valid_bit = true;
 
@@ -614,6 +608,31 @@ class GlobalTagTable : public ClockedObject
 	{
 		return ((tag << tagShift) | ((Addr)index << indexShift));
 	}
+
+    class CntResetEvent : public Event
+    {
+      private:
+        GlobalTagTable *gtt;
+
+      public:
+        CntResetEvent(GlobalTagTable *_gtt)
+            : Event(Default_Pri, AutoDelete), gtt(_gtt)
+        {}
+
+        /** Process */
+        void process()
+        {
+            for (int i = 0; i < gtt->numTagTableEntries; i++) {
+                gtt->table->entries[i].accessCnt = 0;
+                gtt->table->entries[i].replacementCnt = 0;
+            }
+
+            DPRINTF(ChoTag, "cntResetEvent occured\n");
+            gtt->schedule(gtt->cntResetEvent, curTick() + 10000000);
+        }
+    };
+
+    CntResetEvent cntResetEvent;
 };
 
 class GlobalTagTableCallback : public Callback

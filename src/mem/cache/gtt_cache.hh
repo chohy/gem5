@@ -309,6 +309,13 @@ class GTTCache : public BaseCache
      */
     PacketPtr writebackBlk(CacheBlk *blk);
 
+    /**
+    * Create a write-through request for the given block.
+    * @param blk The block to writeback.
+    * @return The writeback request for the block.
+    */
+    PacketPtr writethroughBlk(CacheBlk *blk);
+
 
     void memWriteback();
     void memInvalidate();
@@ -408,6 +415,16 @@ class GTTCache : public BaseCache
     /** Non-default destructor is needed to deallocate memory. */
     virtual ~GTTCache();
 
+    // Cho: Addtional stats
+    Stats::Vector tagtable_hits[MemCmd::NUM_MEM_CMDS];
+    Stats::Vector delta_hits[MemCmd::NUM_MEM_CMDS];
+    Stats::Formula tagtable_overallHits;
+    Stats::Formula delta_overallHits;
+    Stats::Vector tagtable_misses[MemCmd::NUM_MEM_CMDS];
+    Stats::Vector delta_misses[MemCmd::NUM_MEM_CMDS];
+    Stats::Formula tagtable_overallMisses;
+    Stats::Formula delta_overallMisses;
+
     void regStats();
 
     /** serialize the state of the caches
@@ -415,6 +432,20 @@ class GTTCache : public BaseCache
      */
     virtual void serialize(std::ostream &os);
     void unserialize(Checkpoint *cp, const std::string &section);
+
+    void incMissCount(PacketPtr pkt) {
+        BaseCache::incMissCount(pkt);
+
+        if((tags->findEntry(pkt->getAddr()))==NULL)
+            tagtable_misses[pkt->cmdToIndex()][pkt->req->masterId()]++;
+        else delta_misses[pkt->cmdToIndex()][pkt->req->masterId()]++;
+    }
+
+    void incHitCount(PacketPtr pkt) {
+        BaseCache::incHitCount(pkt);
+        tagtable_hits[pkt->cmdToIndex()][pkt->req->masterId()]++;
+        delta_hits[pkt->cmdToIndex()][pkt->req->masterId()]++;
+    }
 };
 
 /**

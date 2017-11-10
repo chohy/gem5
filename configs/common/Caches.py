@@ -48,35 +48,37 @@ from m5.objects import *
 
 class L1Cache(Cache):
     assoc = 2
-    hit_latency = 2
-    response_latency = 2
+    hit_latency = 1
+    response_latency = 1
     mshrs = 4
     tgts_per_mshr = 20
     is_top_level = True
 
 class L2Cache(Cache):
-    assoc = 8
-    hit_latency = 10
-    response_latency = 10
-    mshrs = 20
-    tgts_per_mshr = 12
-    write_buffers = 8
+    assoc = 4
+    hit_latency = 3
+    response_latency = 3
+    mshrs = 16
+    tgts_per_mshr = 80
+    write_buffers = 16
 
 class L3Cache(Cache):
     assoc = 16
-    hit_latency = 20
-    response_latency = 20
-    mshrs = 64
-    tgts_per_mshr = 20
-    write_buffers = 32
+    hit_latency = 11
+    response_latency = 4
+    mshrs = 128
+    tgts_per_mshr = 790
+    write_buffers = 48
+    sequential_access = True
 
 class L4Cache(Cache):
     assoc = 32
-    hit_latency = 40
-    response_latency = 40
-    mshrs = 128
-    tgts_per_mshr = 40
-    write_buffers = 64
+    hit_latency = 117
+    response_latency = 36
+    mshrs = 512
+    tgts_per_mshr = 2560
+    write_buffers = 192
+    sequential_access = True
 
 class IOCache(Cache):
     assoc = 8

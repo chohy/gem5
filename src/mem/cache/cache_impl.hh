@@ -336,6 +336,7 @@ Cache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
 
 
     // Analyze shared tag patterns inter ways, only when miss
+    /*
     if(!blk){
         for(int i=0; i<25; i++){
             std::vector<Addr> shared_tag_pattern;
@@ -358,6 +359,7 @@ Cache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
             num_shared_tag_pattern[i].sample(shared_tag_pattern.size());
         }
     }
+    */
 
 
     // Writeback handling is special case.  We can write the block into

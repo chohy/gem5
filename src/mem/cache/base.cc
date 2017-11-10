@@ -772,6 +772,7 @@ BaseCache::regStats()
         .desc("Number of misses that were no-allocate")
         ;
 
+    /*
     for(int i=0;i<25; i++){
         num_shared_tag_pattern[i]
             .name(name()+".unshared_tag_bits_"+to_string(i))
@@ -779,6 +780,7 @@ BaseCache::regStats()
             .init(33)
             ;
     }
+    */
 }
 
 unsigned int

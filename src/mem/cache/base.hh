@@ -471,7 +471,7 @@ class BaseCache : public MemObject
 
     Stats::Scalar mshr_no_allocate_misses;
 
-    Stats::Histogram num_shared_tag_pattern[25];
+    //Stats::Histogram num_shared_tag_pattern[25];
 
     /**
      * @}
@@ -612,7 +612,6 @@ class BaseCache : public MemObject
     {
         assert(pkt->req->masterId() < system->maxMasters());
         hits[pkt->cmdToIndex()][pkt->req->masterId()]++;
-
     }
 
 };

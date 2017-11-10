@@ -14,18 +14,32 @@ public:
     bool valid_bit;
     TagType shared_tag;
     std::vector<SubArrayType*> subArray;
+    int *MRUArray[2];
+    unsigned subArraySize;
 	//unsigned subArrayMask;
     unsigned accessCnt;
     unsigned replacementCnt;
 
-    TableEntry()
+    TableEntry() {};
+    ~TableEntry() {};
+
+    void Initialize(unsigned _subArraySize)
     {
         valid_bit = false;
         //subArrayMask = 0;
         accessCnt = 0;
         replacementCnt = 0;
-    }
-    ~TableEntry() {};
+        subArraySize = _subArraySize;
+        MRUArray[0] = new int[subArraySize];
+        MRUArray[1] = new int[subArraySize];
+
+        //initiate MRUArray.
+        for (int i = 0; i < subArraySize; i++) {
+            MRUArray[0][i] = 0;
+            MRUArray[1][i] = 0;
+        }
+    };
+
 };
 
 /**
@@ -41,9 +55,11 @@ class TagTable {
 
   public:
 	/** Construct and initialize this tag table. */
-	TagTable(int numEntries) : numTagTableEntries(numEntries)
+	TagTable(int numEntries, unsigned subArraySize) : numTagTableEntries(numEntries)
 	{
 		entries = new TableEntry<TagType, SubArrayType>[numTagTableEntries];
+        for (int i = 0; i < numTagTableEntries; i++)
+            entries[i].Initialize(subArraySize);
 	}
 	/** Destructor */
 	~TagTable()

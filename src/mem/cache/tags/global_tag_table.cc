@@ -16,7 +16,8 @@ GlobalTagTable::GlobalTagTable(const Params *p)
     subArraySize(p->size/(p->num_subarray*p->block_size)),
     sharedTagAccessLatency(p->shared_tag_access_latency),
 	deltaAccessLatency(p->delta_access_latency),
-	dataAccessLatency(p->data_access_latency)
+	dataAccessLatency(p->data_access_latency),
+    cntResetEvent(this)
 {
 	// Check parameters
 	if (blkSize < 4 || !isPowerOf2(blkSize)) {
@@ -42,7 +43,7 @@ GlobalTagTable::GlobalTagTable(const Params *p)
 	/** @todo Make warmup percentag a parameter. */
 	warmupBound = numSubArrays * subArraySize;
 
-	table = new TableType(numTagTableEntries);
+	table = new TableType(numTagTableEntries, subArraySize);
 	subArrays = new SubArrayType[numSubArrays];
 	blks = new BlkType[numSubArrays * subArraySize];
 	// allocate data storage in one bing chunk.
@@ -72,6 +73,8 @@ GlobalTagTable::GlobalTagTable(const Params *p)
 			blk->set = j;
 		}
 	}
+
+    schedule(cntResetEvent, 0);
 }
 
 void
@@ -167,9 +170,9 @@ GlobalTagTable::regStats()
 		.desc("Number of tag table entry accessess")
 		;
 
-	tagAccesses
-		.name(name() + ".tag_accesses")
-		.desc("Number of tag accesses")
+	deltaAccesses
+		.name(name() + ".delta_accesses")
+		.desc("Number of delta accesses")
 		;
 
 	dataAccesses
