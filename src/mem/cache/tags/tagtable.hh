@@ -68,6 +68,9 @@ class TagTable {
 	}
 
     TableEntry<TagType, SubArrayType>* findEntry(TagType shared_tag) const;
+
+    int getEntryIdx(TableEntry<TagType, SubArrayType>* entry);
+    int getAllocatedSubarrayNum();
 };
 
 template <typename TagType, typename SubArrayType>
@@ -80,5 +83,23 @@ TagTable<TagType, SubArrayType>::findEntry(TagType shared_tag) const
             return &entries[i];
     }
     return NULL;
+}
+template <typename TagType, typename SubArrayType>
+int
+TagTable<TagType, SubArrayType>::getEntryIdx(TableEntry<TagType, SubArrayType>* entry) {
+    for (int i = 0; i < numTagTableEntries; i++) {
+        if (entries[i].shared_tag == entry->shared_tag) return i;
+    }
+    return -1;
+}
+
+template <typename TagType, typename SubArrayType>
+int
+TagTable<TagType, SubArrayType>::getAllocatedSubarrayNum() {
+    int sum = 0;
+    for (int i = 0; i < numTagTableEntries; i++) {
+        sum += entries[i].subArray.size();
+    }
+    return sum;
 }
 #endif // __TAGTABLE_HH__

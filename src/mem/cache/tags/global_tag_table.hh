@@ -9,6 +9,7 @@
 #include "base/random.hh"
 #include "base/statistics.hh"
 #include "debug/ChoTag.hh"
+#include "debug/ChoTagEvent.hh"
 #include "mem/cache/tags/base.hh"
 #include "mem/cache/tags/subarray.hh"
 #include "mem/cache/tags/tagtable.hh"
@@ -383,6 +384,16 @@ class GlobalTagTable : public ClockedObject
 		int way = entry->subArray.size();
         Addr index = extractIndex(addr);
 		assert(way > 0);
+
+        for (int i = 0; i < way; i++) {
+            subarray = entry->subArray.at(i);
+            blk = subarray->blks[index];
+            if (blk->isValid())
+                blk = NULL;
+            else
+                return blk;
+        }
+
 		if (way == 1) {
 			subarray = entry->subArray.at(0);
 			blk = subarray->blks[index];
@@ -537,11 +548,14 @@ class GlobalTagTable : public ClockedObject
 		if ((numSubArrays - valid_subarray_cnt) <= (numTagTableEntries - valid_entry_cnt))
 			return false;
 		
-		// Move the most recently used block to 0 index.
 		for (int i = 0; i < numSubArrays; i++) {
 			if (subArrays[i].entry == NULL) {
 				entry->subArray.push_back(&subArrays[i]);
 				subArrays[i].entry = entry;
+                
+                DPRINTF(ChoTag, "Entry %s: %s sub arrays, Remain: %s\n",
+                    table->getEntryIdx(entry), entry->subArray.size(),
+                    numSubArrays-table->getAllocatedSubarrayNum());
 				return true;
 			}
 		}
@@ -627,8 +641,8 @@ class GlobalTagTable : public ClockedObject
                 gtt->table->entries[i].replacementCnt = 0;
             }
 
-            DPRINTF(ChoTag, "cntResetEvent occured\n");
-            gtt->schedule(gtt->cntResetEvent, curTick() + 10000000);
+            DPRINTF(ChoTagEvent, "cntResetEvent occured\n");
+            gtt->schedule(gtt->cntResetEvent, curTick() + 1000000000);
         }
     };
 
