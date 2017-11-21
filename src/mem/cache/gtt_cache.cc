@@ -127,6 +127,16 @@ GTTCache::regStats()
         tagtable_overallMisses.subname(i, system->getMasterName(i));
         delta_overallMisses.subname(i, system->getMasterName(i));
     }
+
+    writethroughs
+        .init(system->maxMasters())
+        .name(name() + ".writethroughs")
+        .desc("number of writethroughs")
+        .flags(total | nozero | nonan)
+        ;
+    for (int i = 0; i < system->maxMasters(); i++) {
+        writethroughs.subname(i, system->getMasterName(i));
+    }
 }
 
 void
@@ -1422,7 +1432,7 @@ GTTCache::writethroughBlk(CacheBlk *blk)
 {
     assert(blk && blk->isValid() && blk->isDirty());
 
-    writebacks[Request::wbMasterId]++;
+    writethroughs[Request::wbMasterId]++;
 
     Request *writebackReq =
         new Request(tags->regenerateBlkAddr(blk->tag, blk->set), blkSize, 0,

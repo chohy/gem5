@@ -310,8 +310,10 @@ class GlobalTagTable : public ClockedObject
 
                 //MRU block update
                 int position = std::distance(entry->subArray.begin(), it);
-                entry->MRUArray[1][index] = entry->MRUArray[0][index];
-                entry->MRUArray[0][index] = position;
+                if (position != entry->MRUArray[0][index]) {
+                    entry->MRUArray[1][index] = entry->MRUArray[0][index];
+                    entry->MRUArray[0][index] = position;
+                }
                 
                 blk->refCount += 1;
                 dataAccesses += 1;
@@ -342,7 +344,7 @@ class GlobalTagTable : public ClockedObject
 
 		std::vector<SubArrayType*>::iterator it;
 		for (it = entry->subArray.begin(); it < entry->subArray.end(); it++) {
-			(*it)->findBlk(index, tag, is_secure);
+			blk = (*it)->findBlk(index, tag, is_secure);
 			if (blk)
 				return blk;
 		}
@@ -383,14 +385,12 @@ class GlobalTagTable : public ClockedObject
 
 		int way = entry->subArray.size();
         Addr index = extractIndex(addr);
-		assert(way > 0);
+        assert(way > 0);
 
         for (int i = 0; i < way; i++) {
             subarray = entry->subArray.at(i);
             blk = subarray->blks[index];
-            if (blk->isValid())
-                blk = NULL;
-            else
+            if (!blk->isValid())
                 return blk;
         }
 
@@ -506,8 +506,10 @@ class GlobalTagTable : public ClockedObject
                 break;
             }
         }
-        entry->MRUArray[1][index] = entry->MRUArray[0][index];
-        entry->MRUArray[0][index] = position;
+        if (position != entry->MRUArray[0][index]) {
+            entry->MRUArray[1][index] = entry->MRUArray[0][index];
+            entry->MRUArray[0][index] = position;
+        }
 	}
 
 	/**

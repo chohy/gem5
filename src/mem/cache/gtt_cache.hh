@@ -424,6 +424,7 @@ class GTTCache : public BaseCache
     Stats::Vector delta_misses[MemCmd::NUM_MEM_CMDS];
     Stats::Formula tagtable_overallMisses;
     Stats::Formula delta_overallMisses;
+    Stats::Vector writethroughs;
 
     void regStats();
 
