@@ -10,6 +10,7 @@
 #include "base/statistics.hh"
 #include "debug/ChoTag.hh"
 #include "debug/ChoTagEvent.hh"
+#include "debug/SubarrayDist.hh"
 #include "mem/cache/tags/base.hh"
 #include "mem/cache/tags/subarray.hh"
 #include "mem/cache/tags/tagtable.hh"
@@ -135,6 +136,13 @@ class GlobalTagTable : public ClockedObject
     Stats::Scalar deltaAccesses;
     /** Number of data blocks consulted over all accesses. */
     Stats::Scalar dataAccesses;
+
+    /** Number of subarrays of entry. */
+    Stats::Vector entrySubarrayCnt;
+    /** Number of entry accesses of entry. */
+    Stats::Vector entryAccessCnt;
+    /** Number of block replacements of entry. */
+    Stats::Vector entryReplacementCnt;
 
     /**
      * @}
@@ -639,12 +647,31 @@ class GlobalTagTable : public ClockedObject
         void process()
         {
             for (int i = 0; i < gtt->numTagTableEntries; i++) {
+                DPRINTF(SubarrayDist,
+                    "Entry %d: %d subarrays, %d accesses, %d replacements\n", i,
+                    gtt->table->entries[i].subArray.size(),
+                    gtt->table->entries[i].accessCnt,
+                    gtt->table->entries[i].replacementCnt);
+
+                gtt->entrySubarrayCnt[i] = gtt->table->entries[i].subArray.size();
+                gtt->entryAccessCnt[i] = gtt->table->entries[i].accessCnt;
+                gtt->entryReplacementCnt[i] = gtt->table->entries[i].replacementCnt;
+                
                 gtt->table->entries[i].accessCnt = 0;
                 gtt->table->entries[i].replacementCnt = 0;
             }
 
+            /*
+            for (int i = 0; i < gtt->numTagTableEntries; i++) {
+                gtt->table->entries[i].accessCnt = 0;
+                gtt->table->entries[i].replacementCnt = 0;
+            }
+            */
+
             DPRINTF(ChoTagEvent, "cntResetEvent occured\n");
-            gtt->schedule(gtt->cntResetEvent, curTick() + 1000000000);
+            
+            
+            gtt->schedule(gtt->cntResetEvent, curTick() + 100000000);
         }
     };
 

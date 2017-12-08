@@ -1445,9 +1445,9 @@ GTTCache::writethroughBlk(CacheBlk *blk)
     //blk->tickInserted = curTick();
 
     PacketPtr writeback = new Packet(writebackReq, MemCmd::Writeback);
-    if (blk->isWritable()) {
-        writeback->setSupplyExclusive();
-    }
+    //if (blk->isWritable()) {
+    //    writeback->setSupplyExclusive();
+    //}
     writeback->allocate();
     std::memcpy(writeback->getPtr<uint8_t>(), blk->data, blkSize);
 
@@ -2132,7 +2132,7 @@ GTTCache::getTimingPacket()
 
     if (mshr->isForwardNoResponse()) {
         // no response expected, just forward packet as it is
-        assert(tags->findBlock(mshr->blkAddr, mshr->isSecure) == NULL);
+        //assert(tags->findBlock(mshr->blkAddr, mshr->isSecure) == NULL);
         pkt = tgt_pkt;
     }
     else {

@@ -180,6 +180,27 @@ GlobalTagTable::regStats()
 		.desc("Number of data accesses")
 		;
 
+    entrySubarrayCnt
+        .init(numTagTableEntries)
+        .name(name() + ".entrySubarrayCnt")
+        .desc("The number of subarrays of entry")
+        .flags(nozero | nonan)
+        ;
+
+    entryAccessCnt
+        .init(numTagTableEntries)
+        .name(name() + ".entryAccessCnt")
+        .desc("The number of entry accesses of entry")
+        .flags(nozero | nonan)
+        ;
+
+    entryReplacementCnt
+        .init(numTagTableEntries)
+        .name(name() + ".entryReplacementCnt")
+        .desc("The number of block replacements of entry")
+        .flags(nozero | nonan)
+        ;
+
 	registerDumpCallback(new GlobalTagTableDumpCallback(this));
 	registerExitCallback(new GlobalTagTableCallback(this));
 }

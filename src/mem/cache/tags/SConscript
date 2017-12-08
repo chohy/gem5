@@ -41,3 +41,4 @@ Source('global_tag_table.cc')
 
 DebugFlag('ChoTag')
 DebugFlag('ChoTagEvent')
+DebugFlag('SubarrayDist')

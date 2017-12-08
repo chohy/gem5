@@ -439,7 +439,10 @@ class GTTCache : public BaseCache
 
         if((tags->findEntry(pkt->getAddr()))==NULL)
             tagtable_misses[pkt->cmdToIndex()][pkt->req->masterId()]++;
-        else delta_misses[pkt->cmdToIndex()][pkt->req->masterId()]++;
+        else {
+            tagtable_hits[pkt->cmdToIndex()][pkt->req->masterId()]++;
+            delta_misses[pkt->cmdToIndex()][pkt->req->masterId()]++;
+        }
     }
 
     void incHitCount(PacketPtr pkt) {
